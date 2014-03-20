@@ -3,84 +3,75 @@ package il.ac.huji.todolist;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.zip.Inflater;
 
 public class TodoActivity extends Activity {
-    PlaceholderFragment fragment;
+    public static final int REQUEST_CODE_SECRET = 1337;
+    public static final int INVALID = -1;
+    ArrayList<TodoItem> defaultTodos;
+    ArrayAdapter<TodoItem> todos;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_todo);
-
-        if (savedInstanceState == null) {
-            fragment = new PlaceholderFragment();
-            getFragmentManager().beginTransaction()
-                    .add(R.id.container, fragment)
-                    .commit();
-        }
+        defaultTodos = new ArrayList<>();
+        todos = new ArrayWithDateAdapter(this, R.layout.todo,R.id.todoItem, defaultTodos);
+        ListView list = (ListView)findViewById(R.id.lstTodoItems);
+        list.setAdapter(todos);
+        registerForContextMenu(list);
     }
 
     @Override
     public boolean onCreateOptionsMenu(final Menu menu) {
         
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.todo, menu);
-        final EditText currentTodo = (EditText)findViewById(R.id.edtNewItem);
 
-        boolean shouldShow = !currentTodo.getText().toString().isEmpty();
-
-        menu.getItem(0).setVisible(shouldShow);
-
-        currentTodo.addTextChangedListener(new TextWatcher() {
-
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                boolean shouldShow = !currentTodo.getText().toString().isEmpty();
-                menu.getItem(0).setVisible(shouldShow);
-            }
-
-            @Override
-            public void afterTextChanged(Editable editable) {
-
-            }
-            @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i2, int i3) {
-
-            }
-        });
 
         MenuItem item = menu.findItem(R.id.action_add);
-
+        final TodoActivity that = this;
         item.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem menuItem) {
-
-                fragment.defaultTodos.add(currentTodo.getText().toString());
-                currentTodo.setText("");
-                fragment.todos.notifyDataSetChanged();
+                Intent t = new Intent(that, AddNewTodoItemActivity.class);
+                startActivityForResult(t, REQUEST_CODE_SECRET);
                 return false;
             }
         });
-
-        return true;
+        return super.onCreateOptionsMenu(menu);
+    }
+    // got result back
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        boolean notOurRequest = (result != RESULT_OK) || (request != REQUEST_CODE_SECRET);
+        if(notOurRequest){
+            return;
+        }
+        TodoItem t = new TodoItem();
+        t.date = new Date(data.getLongExtra("date", INVALID));
+        t.text = data.getStringExtra("text");
+        defaultTodos.add(t);
+        todos.notifyDataSetChanged();
     }
 
     @Override
@@ -92,59 +83,75 @@ public class TodoActivity extends Activity {
     }
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
-        if (v.getId() == R.id.lstTodoItems) {
-            ListView lv = (ListView) v;
-            final AdapterView.AdapterContextMenuInfo acmi = (AdapterView.AdapterContextMenuInfo) menuInfo;
-            final String itemClicked = (String) lv.getItemAtPosition(acmi.position);
-            menu.setHeaderTitle(itemClicked);
-            menu.add("Remove "+ itemClicked+"?");
-            menu.getItem(0).setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                @Override
-                public boolean onMenuItemClick(MenuItem menuItem) {
-                    fragment.defaultTodos.remove(acmi.position);
-                    fragment.todos.notifyDataSetChanged();
-                    return true;
-                }
-            });
+        super.onCreateContextMenu(menu,v,menuInfo);
+        if (v.getId() != R.id.lstTodoItems) {
+            return;
         }
+        ListView lv = (ListView) v;
+        final AdapterView.AdapterContextMenuInfo acmi = (AdapterView.AdapterContextMenuInfo) menuInfo;
+        final TodoItem itemClicked = (TodoItem) lv.getItemAtPosition(acmi.position);
+        menu.setHeaderTitle(itemClicked.text);
+        MenuInflater inf = getMenuInflater();
+        inf.inflate(R.menu.todo_item_context,menu);
+        boolean call = itemClicked.text.startsWith("call") || itemClicked.text.startsWith("Call");
+        menu.getItem(1).setVisible(call);
+        menu.getItem(1).setTitle(itemClicked.text);
+
+        menu.getItem(0).setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem menuItem) {
+                defaultTodos.remove(acmi.position);
+                todos.notifyDataSetChanged();
+                return true;
+            }
+        });
+        menu.getItem(1).setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem menuItem) {
+                String number = itemClicked.text.replaceAll("[a-zA-Z -]","");
+                startActivity(new Intent(Intent.ACTION_CALL, Uri.parse("tel:"+number)));
+
+                return true;
+            }
+        });
+
     }
-    /**
-     * A placeholder fragment containing a simple view.
-     */
-    public static class PlaceholderFragment extends Fragment {
-        ArrayAdapter<String> todos;
-        ArrayList<String> defaultTodos = new ArrayList<>();
-        public PlaceholderFragment() {
-        }
 
-        @Override
-        public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                Bundle savedInstanceState) {
-            View rootView = inflater.inflate(R.layout.fragment_todo, container, false);
-            assert rootView != null;
-            ListView list = (ListView)rootView.findViewById(R.id.lstTodoItems);
-            registerForContextMenu(list);
+    static class ArrayWithDateAdapter extends ArrayAdapter<TodoItem>{
 
-            Activity cur = this.getActivity();
-            assert cur != null;
-            todos = new ArrayAlternatingColorAdapter(cur, R.layout.todo,R.id.todo_item, defaultTodos);
-            list.setAdapter(todos);
-            return rootView;
-        }
-    }
-    static class ArrayAlternatingColorAdapter extends ArrayAdapter<String>{
-
-        public ArrayAlternatingColorAdapter(Context context, int resource, int textViewResourceId, List<String> objects) {
+        List<TodoItem> data;
+        LayoutInflater inf;
+        public ArrayWithDateAdapter(Context context, int resource, int textViewResourceId, List<TodoItem> objects) {
             super(context, resource, textViewResourceId, objects);
+            this.data = objects;
+            this.inf = LayoutInflater.from(context);
         }
         @Override
         public View getView(int position, View convertView, ViewGroup parent){
-            View view = super.getView(position,convertView,parent);
-            TextView item = (TextView)view.findViewById(R.id.todo_item);
-            int color = (position%2==1) ? Color.BLUE : Color.RED;
-            item.setTextColor(color);
+            View view = inf.inflate(R.layout.todo_item, null);
+            TodoItem item = this.data.get(position); // model
+
+            TextView content = (TextView)view.findViewById(R.id.txtTodoTitle);
+            TextView date = (TextView)view.findViewById(R.id.txtTodoDueDate);
+
+            warnIfDue(item, content, date);
+
+            DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+            content.setText(item.text);
+            date.setText(dateFormat.format(item.date));
             return view;
         }
+
+        private void warnIfDue(TodoItem item, TextView content, TextView date) {
+            if(item.date.before(new Date())){
+                content.setTextColor(Color.RED);
+                date.setTextColor(Color.RED);
+            }
+        }
+    }
+    class TodoItem{
+        String text;
+        Date date;
     }
 
 }

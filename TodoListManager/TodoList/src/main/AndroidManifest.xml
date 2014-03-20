@@ -16,6 +16,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="il.ac.huji.todolist.AddNewTodoItemActivity"
+            android:theme="@android:style/Theme.Holo.Light.Dialog"
+            android:label="@string/title_activity_add_new_todo_item" >
+        </activity>
     </application>
 
 </manifest>
